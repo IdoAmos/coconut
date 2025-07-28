@@ -168,7 +168,10 @@ def main():
         configs.coconut = False
 
     if configs.coconut:
-        model = Coconut(model, latent_id, start_id, end_id, tokenizer.eos_token_id)
+        use_legacy_cache = True
+        if "Qwen" in configs.model_id:
+            use_legacy_cache = False
+        model = Coconut(model, latent_id, start_id, end_id, tokenizer.eos_token_id, use_legacy_cache=use_legacy_cache)
 
     if configs.load_model_path != "None" and not loaded:
         print(model.load_state_dict(saved_weights, strict=False))

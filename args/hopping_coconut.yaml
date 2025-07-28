@@ -16,7 +16,7 @@ epochs_per_stage: 5
 max_latent_stage: 1
 pad_latent_to_max: True
 
-save_only_improve: False
+save_only_improve: True
 uniform_prob: 0.0
 model_id: "Qwen/Qwen2.5-1.5B"  # openai-community/gpt2 ; "Qwen/Qwen2.5-1.5B" 
 load_model_path: None
