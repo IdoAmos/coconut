@@ -7,6 +7,8 @@ from torch.nn import CrossEntropyLoss
 from collections import namedtuple
 from transformers.models.gpt2 import GPT2LMHeadModel
 
+from transformers import DynamicCache
+
 Outputs = namedtuple("Outputs", ["loss", "inputs_embeds", "logits"])
 MAX_N_LATENT = 8
 
@@ -20,6 +22,7 @@ class Coconut(nn.Module):
         start_latent_id,
         end_latent_id,
         eos_token_id,
+        use_legacy_cache=True,
     ):
 
         super(Coconut, self).__init__()
@@ -35,6 +38,9 @@ class Coconut(nn.Module):
             self.embedding = self.base_causallm.transformer.get_input_embeddings()
         else:
             self.embedding = self.base_causallm.get_input_embeddings()
+
+        # some models in transformers v.4.53.2 don't support legacy cache
+        self.use_legacy_cache = use_legacy_cache
 
     def forward(self, input_ids, attention_mask, labels, position_ids, **kwargs):
 
@@ -64,6 +70,7 @@ class Coconut(nn.Module):
 
             if kv_cache == None:
                 # first forward pass
+                past_key_values = None if self.use_legacy_cache else DynamicCache()
                 outputs = self.base_causallm(
                     inputs_embeds=inputs_embeds[
                         :, next_compute_range[0] : next_compute_range[1], :
@@ -75,18 +82,36 @@ class Coconut(nn.Module):
                         :, next_compute_range[0] : next_compute_range[1]
                     ],
                     output_hidden_states=True,
+                    past_key_values=past_key_values,
                 )
                 hidden_states_offset = 0
 
             else:
                 # extract kv cache to reuse
-                past_key_values = [
-                    (
-                        k[:, :, : next_compute_range[0], :],
-                        v[:, :, : next_compute_range[0], :],
+                if self.use_legacy_cache:
+                    past_key_values = [
+                        (
+                            k[:, :, : next_compute_range[0], :],
+                            v[:, :, : next_compute_range[0], :],
+                        )
+                        for k, v in kv_cache
+                    ]
+                else:
+                    cache_to_slice = kv_cache
+                    if isinstance(kv_cache, DynamicCache):
+                        # If it's a modern Cache object, convert it to a legacy tuple
+                        # so the existing slicing logic can work on it.
+                        cache_to_slice = kv_cache.to_legacy_cache()
+                    
+                    # The original slicing logic now works on the (potentially converted) tuple
+                    past_key_values = tuple(
+                        (
+                            k[:, :, :next_compute_range[0], :],
+                            v[:, :, :next_compute_range[0], :],
+                        )
+                        for k, v in cache_to_slice
                     )
-                    for k, v in kv_cache
-                ]
+                    past_key_values = DynamicCache.from_legacy_cache(past_key_values)
 
                 outputs = self.base_causallm(
                     inputs_embeds=inputs_embeds[
@@ -158,23 +183,40 @@ class Coconut(nn.Module):
             )
 
         # final pass
+        if kv_cache is None:
+            pass
+        elif self.use_legacy_cache:
+            kv_cache = [
+                (
+                    k[:, :, : next_compute_range[0], :],
+                    v[:, :, : next_compute_range[0], :],
+                )
+                for k, v in kv_cache
+            ]
+
+        else:
+            cache_to_slice = kv_cache
+            if isinstance(kv_cache, DynamicCache):
+                # If it's a modern Cache object, convert it to a legacy tuple
+                # so the existing slicing logic can work on it.
+                cache_to_slice = kv_cache.to_legacy_cache()
+            
+            kv_cache = tuple(
+                (
+                    k[:, :, :next_compute_range[0], :],
+                    v[:, :, :next_compute_range[0], :],
+                )
+                for k, v in cache_to_slice
+            )
+            kv_cache = DynamicCache.from_legacy_cache(past_key_values)
+
         outputs = self.base_causallm(
             inputs_embeds=inputs_embeds[
                 :, next_compute_range[0] : next_compute_range[1], :
             ],
             attention_mask=attention_mask[:, : next_compute_range[1]],
             position_ids=position_ids[:, next_compute_range[0] : next_compute_range[1]],
-            past_key_values=(
-                [
-                    (
-                        k[:, :, : next_compute_range[0], :],
-                        v[:, :, : next_compute_range[0], :],
-                    )
-                    for k, v in kv_cache
-                ]
-                if kv_cache
-                else None
-            ),
+            past_key_values=kv_cache,
             output_hidden_states=True,
         )
 

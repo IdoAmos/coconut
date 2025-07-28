@@ -24,7 +24,7 @@ seed: 0
 resume: 0
 bf16: False
 train_path: data/hopping_train.json
-val_path: data/hopping_valid.json
+val_path: data/hopping_eval.json
 reset_optimizer: True
 batch_size_training: 32
 debug: False

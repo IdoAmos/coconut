@@ -35,6 +35,8 @@ import argparse
 import functools
 from utils import Config, set_seed
 
+from added_utils import registry as util_registry
+
 
 def main():
 
@@ -52,6 +54,11 @@ def main():
     # load the configuration file
     with open(args.config_file) as f:
         config_dict = yaml.safe_load(f)
+
+    task_utils = None
+    if config_dict.get("add_utils", None) is not None:
+        target_util = config_dict["add_utils"]
+        task_utils = util_registry[target_util]()
 
     if rank == 0:
         print("Config:", config_dict)
@@ -200,6 +207,15 @@ def main():
         d["answer"].replace(",", "").strip() for d in json.load(open(configs.val_path))
     ]
     cot_val = ["\n".join(d["steps"]) for d in json.load(open(configs.val_path))]
+    task_arg_vals = None
+    if task_utils is not None and getattr(task_utils, "task_arg_keys", None) is not None:
+        target_keys = task_utils.task_arg_keys
+        task_arg_vals = {}
+        for key in target_keys:
+            task_arg_vals[key] = [
+                d[key] for d in json.load(open(configs.val_path)) if key in d
+            ]
+        
 
     base_dataset_valid = get_dataset(
         configs.val_path, tokenizer, max_size=32 if configs.debug else 100000000
@@ -330,6 +346,11 @@ def main():
 
             for step, batch in enumerate(train_dataloader):
 
+                if task_utils is not None:
+                    max_num_batches = getattr(task_utils, "num_train_batches", None)
+                    if max_num_batches is not None and step >= max_num_batches:
+                        break
+
                 if step == 0 and wandb_run and rank == 0:
                     print("logging training data")
                     cur_bs = len(batch["input_ids"])
@@ -438,6 +459,7 @@ def main():
             torch.tensor(0, device=rank),
             torch.tensor(0, device=rank),
         )
+        task_cor = torch.tensor(0, device=rank)
 
         with torch.no_grad():
             parallel_model.module.eval()
@@ -455,6 +477,10 @@ def main():
                 answer = answers_val[test_idx.cpu().item()]
                 answer_cot = cot_val[test_idx.cpu().item()]
                 question = question_val[test_idx.cpu().item()]
+                if task_arg_vals is not None:
+                    sample_special_vals = {}
+                    for key in task_utils.task_arg_keys:
+                        sample_special_vals[key] = task_arg_vals[key][test_idx.cpu().item()]
 
                 total += 1
 
@@ -482,17 +508,31 @@ def main():
                 cor += answer_output == answer
                 cor_cot += cot_output == answer_cot
 
+
                 pbar.update(1)
                 pbar.set_description(
                     f"Test accuracy: {round(float(cor.detach().float() / total.detach().float()), 2)}"
                 )
+                
+                if task_arg_vals is not None:
+                    task_cor += task_utils.check_predictions(
+                        answer_output, sample_special_vals
+                    )
+                if task_utils is not None:
+                    max_num_samples = getattr(task_utils, "num_eval_samples", None)
+                    if max_num_samples is not None and idx >= max_num_samples:
+                        break
 
             pbar.close()
             print(f"Device {rank}: Cor={cor}, CoT={cor_cot}, Total={total}")
+            if task_utils is not None:
+                print(f"Device {rank}: Task Cor={task_cor}")
 
         dist.all_reduce(cor_cot, op=dist.ReduceOp.SUM)
         dist.all_reduce(cor, op=dist.ReduceOp.SUM)
         dist.all_reduce(total, op=dist.ReduceOp.SUM)
+        if task_utils is not None:
+            dist.all_reduce(task_cor, op=dist.ReduceOp.SUM)
 
         cor_cot = cor_cot.item()
         cor = cor.item()
@@ -500,10 +540,14 @@ def main():
         if rank == 0:
             print(f"Accuracy on validation set: {cor} / {total} = {cor/total}")
             print(f"CoT match on validation set: {cor_cot} / {total} = {cor_cot/total}")
+            if task_utils is not None:
+                print(f"Task accuracy: {task_cor.item() / total}")
         sys.stdout.flush()
 
         if wandb_run:
             wandb_run.log({"eval/acc": cor / total, "eval/cot_em": cor_cot / total})
+            if task_utils is not None:
+                wandb_run.log({"eval/task_acc": task_cor.item() / total})
 
         if configs.only_eval:
             break
