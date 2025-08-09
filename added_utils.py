@@ -16,7 +16,7 @@ class HoppingUtils:
     def __init__(self, inverted=True):
         self.metric_pipeline = MetricPipeline(inverted_task=inverted, tokenizer=None)
         self.task_arg_keys = ["all_answers", "is_1hop"]
-        self.num_eval_samples = None # 20
+        self.num_eval_samples = 1000
         self.num_train_batches = None # 100
 
     def prediction_extraction_fn(self, preds: str) -> str:
@@ -32,6 +32,8 @@ class HoppingUtils:
         :param labels: List of labels.
         :return: List of boolean values indicating if each prediction matches the corresponding label.
         """
+        if preds is None or len(preds) == 0:
+            return False
         labels = sample_special_vals["all_answers"]
         preds = self.prediction_extraction_fn(preds)
         labels = self.metric_pipeline.label_extraction_fn(labels)
