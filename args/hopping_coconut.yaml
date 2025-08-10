@@ -2,7 +2,7 @@
 
 project: coconut
 save_path: results/hopping
-name: hopping-coconut-longer-stages
+name: hopping
 
 only_eval: False
 
@@ -12,8 +12,8 @@ no_thoughts: False
 no_cot: False
 
 c_thought: 1
-epochs_per_stage: 25
-max_latent_stage: 1
+epochs_per_stage: 5
+max_latent_stage: 2
 pad_latent_to_max: True
 
 save_only_improve: True
