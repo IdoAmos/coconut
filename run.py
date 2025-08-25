@@ -36,6 +36,7 @@ import functools
 from utils import Config, set_seed
 
 from added_utils import registry as util_registry
+import time
 
 
 def main():
@@ -463,6 +464,7 @@ def main():
             torch.tensor(0, device=rank),
         )
         task_cor = torch.tensor(0, device=rank)
+        sample_time = torch.tensor(0, device=rank, dtype=torch.float32)
 
         with torch.no_grad():
             parallel_model.module.eval()
@@ -488,11 +490,13 @@ def main():
                 total += 1
 
                 # synced_gpus=True in FSDP mode, as we need to keep # forward pass the same on each device
+                start = time.time()
                 outputs = parallel_model.module.generate(
                     **batch,
                     max_new_tokens=max_new_tokens,
                     synced_gpus=not configs.only_eval,
                 )
+                elapsed_time = time.time() - start
 
                 text_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
                 answer_output = text_output.split("#")[-1].replace(",", "").strip()
@@ -521,6 +525,8 @@ def main():
                     task_cor += task_utils.check_predictions(
                         answer_output, sample_special_vals
                     )
+                sample_time += elapsed_time
+
                 if task_utils is not None:
                     max_num_samples = getattr(task_utils, "num_eval_samples", None)
                     if max_num_samples is not None and idx >= max_num_samples:
@@ -536,6 +542,7 @@ def main():
         dist.all_reduce(total, op=dist.ReduceOp.SUM)
         if task_utils is not None:
             dist.all_reduce(task_cor, op=dist.ReduceOp.SUM)
+        dist.all_reduce(sample_time, op=dist.ReduceOp.SUM)
 
         cor_cot = cor_cot.item()
         cor = cor.item()
@@ -545,10 +552,11 @@ def main():
             print(f"CoT match on validation set: {cor_cot} / {total} = {cor_cot/total}")
             if task_utils is not None:
                 print(f"Task accuracy: {task_cor.item() / total}")
+            print(f"Average time [s] per sample:", sample_time.item() / total)
         sys.stdout.flush()
 
         if wandb_run:
-            wandb_run.log({"eval/acc": cor / total, "eval/cot_em": cor_cot / total})
+            wandb_run.log({"eval/acc": cor / total, "eval/cot_em": cor_cot / total, "eval/mean_time[s]": sample_time.item() / total})
             if task_utils is not None:
                 wandb_run.log({"eval/task_acc": task_cor.item() / total})
 

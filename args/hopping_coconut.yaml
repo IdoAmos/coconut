@@ -23,8 +23,8 @@ load_model_path: None
 seed: 0
 resume: 0
 bf16: False
-train_path: data/hopping_train.json
-val_path: data/hopping_eval.json
+train_path: data/hop2late/hop2late_fk_n5000_train.json
+val_path: data/hop2late/hop2late_fk_n5000_eval.json
 reset_optimizer: True
 batch_size_training: 32
 debug: False
