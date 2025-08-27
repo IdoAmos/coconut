@@ -557,7 +557,7 @@ def main():
         sys.stdout.flush()
 
         if wandb_run:
-            wandb_run.log({"eval/acc": cor / total, "eval/cot_em": cor_cot / total, "eval/mean_time[s]": "sample_time.item() / total"})
+            wandb_run.log({"eval/acc": cor / total, "eval/cot_em": cor_cot / total, "eval/mean_time[s]": sample_time.item() / total})
             if task_utils is not None:
                 wandb_run.log({"eval/task_acc": task_cor.item() / total})
 
@@ -589,7 +589,9 @@ def main():
         elif cor / total > best_acc_per_stage[scheduled_stage]:
             best_acc_per_stage[scheduled_stage] = cor / total
         
-        if cor / total >= best_acc_per_stage[scheduled_stage] and configs.save_stage_on_improve:        
+        if cor / total >= best_acc_per_stage[scheduled_stage] and configs.save_stage_on_improve:     
+            states = parallel_model.state_dict()
+
             if rank == 0:
                 torch.save(states, os.path.join(save_dir, f"stage_{scheduled_stage}_best_ckpt.ckpt"))
                 ckpt_metadata = {
@@ -601,6 +603,11 @@ def main():
                 with open(f"stage_{scheduled_stage}_ckpt_metad.json", "w") as f:
                     json.dump(ckpt_metadata, f)
                 print("saving model.")
+            
+            dist.barrier()
+            del states
+            gc.collect()
+            torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
