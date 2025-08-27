@@ -2,7 +2,7 @@
 
 project: coconut
 save_path: results/hopping
-name: hopping
+name: hopping-5K
 
 only_eval: False
 
@@ -17,6 +17,7 @@ max_latent_stage: 2
 pad_latent_to_max: True
 
 save_only_improve: True
+save_stage_on_improve: True
 uniform_prob: 0.0
 model_id: "Qwen/Qwen2.5-1.5B"  # openai-community/gpt2 ; "Qwen/Qwen2.5-1.5B" 
 load_model_path: None

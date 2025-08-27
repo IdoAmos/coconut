@@ -256,6 +256,7 @@ def main():
         )
 
     best_acc = 0
+    best_acc_per_stage = {}
 
     collator = MyCollator(tokenizer, latent_id=latent_id, label_pad_token_id=-100)
 
@@ -582,6 +583,16 @@ def main():
             del states
             gc.collect()
             torch.cuda.empty_cache()
+        
+        if scheduled_stage not in best_acc_per_stage:
+            best_acc_per_stage[scheduled_stage] = cor / total
+        elif cor / total > best_acc_per_stage[scheduled_stage]:
+            best_acc_per_stage[scheduled_stage] = cor / total
+        
+        if cor / total >= best_acc_per_stage[scheduled_stage] and configs.save_stage_on_improve:        
+            if rank == 0:
+                torch.save(states, os.path.join(save_dir, f"stage_{scheduled_stage}_checkpoint_{epoch + 1}"))
+                print("saving model.")
 
 
 if __name__ == "__main__":
