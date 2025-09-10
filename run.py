@@ -600,7 +600,8 @@ def main():
                     "mean_time": sample_time.item() / total,
                     "task_perf": None if task_utils is None else task_cor.item() / total
                 }
-                with open(f"stage_{scheduled_stage}_ckpt_metad.json", "w") as f:
+                metadata_path = os.path.join(save_dir, f"stage_{scheduled_stage}_ckpt_metad.json")
+                with open(metadata_path, "w") as f:
                     json.dump(ckpt_metadata, f)
                 print("saving model.")
             
