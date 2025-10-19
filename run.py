@@ -255,6 +255,10 @@ def main():
             weight_decay=configs.weight_decay,
         )
 
+    if configs.only_eval:
+        # if only eval - store the questions and answers to a local file
+        run_logs = {"questions": [], "answers": [], "cot": [], "pred_answers": [], "pred_cot": [], "response": [], "time_per_sample": [], "ans_cor": [], "cot_cor": [], "task_cor": []}
+
     best_acc = 0
     best_acc_per_stage = {}
 
@@ -516,7 +520,6 @@ def main():
                 cor += answer_output == answer
                 cor_cot += cot_output == answer_cot
 
-
                 pbar.update(1)
                 pbar.set_description(
                     f"Test accuracy: {round(float(cor.detach().float() / total.detach().float()), 2)}"
@@ -528,9 +531,25 @@ def main():
                     )
                 sample_time += elapsed_time
 
+                if configs.only_eval:
+                    run_logs["questions"].append(question)
+                    run_logs["answers"].append(answer)
+                    run_logs["cot"].append(answer_cot)
+                    run_logs["pred_answers"].append(answer_output)
+                    run_logs["pred_cot"].append(cot_output)
+                    run_logs["response"].append(text_output)
+                    run_logs["ans_cor"].append(int(answer_output == answer))
+                    run_logs["cot_cor"].append(int(cot_output == answer_cot))
+                    if task_arg_vals is not None:
+                        run_logs["task_cor"].append(int(task_utils.check_predictions(
+                            answer_output, sample_special_vals
+                        )))
+                    run_logs["time_per_sample"].append(elapsed_time)
+
                 if task_utils is not None:
                     max_num_samples = getattr(task_utils, "num_eval_samples", None)
                     if max_num_samples is not None and idx >= max_num_samples:
+                        print(f"Reached max number of samples {max_num_samples} - terminating loop")
                         break
 
             pbar.close()
@@ -610,6 +629,22 @@ def main():
             gc.collect()
             torch.cuda.empty_cache()
 
+    if configs.only_eval:
+        with open(os.path.join(save_dir, f"run_logs_r{rank}.json"), "w") as f:
+            json.dump(run_logs, f, indent=4)
+        print(f"Saved eval logs to {os.path.join(save_dir, f'run_logs_{rank}.json')}")
+        eval_final_scores = {
+            "acc": sum(run_logs["ans_cor"]) / len(run_logs["ans_cor"]) if run_logs["ans_cor"] else 0,
+            "cot": sum(run_logs["cot_cor"]) / len(run_logs["cot_cor"]) if run_logs["cot_cor"] else 0,
+            "task": sum(run_logs["task_cor"]) / len(run_logs["task_cor"]) if run_logs["task_cor"] else 0,
+        }
+        print(f"Final Eval Scores at Rank {rank}:\n{eval_final_scores}")
+        with open(os.path.join(save_dir, f"final_eval_scores_r{rank}.json"), "w") as f:
+            json.dump(eval_final_scores, f)
+        eval_metadata = config_dict.copy()
+        if rank == 0:
+            with open(os.path.join(save_dir, "eval_metadata.json"), "w") as f:
+                json.dump(eval_metadata, f)
 
 if __name__ == "__main__":
     main()
