@@ -607,8 +607,8 @@ def main():
             best_acc_per_stage[scheduled_stage] = cor / total
         elif cor / total > best_acc_per_stage[scheduled_stage]:
             best_acc_per_stage[scheduled_stage] = cor / total
-        
-        if cor / total >= best_acc_per_stage[scheduled_stage] and configs.save_stage_on_improve:     
+
+        if cor / total >= best_acc_per_stage[scheduled_stage] and getattr(configs, "save_stage_on_improve", False):
             states = parallel_model.state_dict()
 
             if rank == 0:
