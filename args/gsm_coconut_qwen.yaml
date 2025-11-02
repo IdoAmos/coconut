@@ -23,7 +23,7 @@ model_id: "Qwen/Qwen2.5-1.5B"
 load_model_path: None # /home/idoamos_google_com/projects/cot/coconut/results/gsm/gsm-cot/checkpoint_11
 seed: 0
 resume: 0
-bf16: True
+bf16: False
 train_path: data/gsm_train.json
 val_path: data/gsm_valid.json
 reset_optimizer: True
