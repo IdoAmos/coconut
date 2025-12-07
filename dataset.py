@@ -13,8 +13,10 @@ from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 from transformers.data.data_collator import pad_without_fast_tokenizer_warning
 
+ANSWER_PREFIX_V1 = "###"
+ANSWER_PREFIX_V2 = "The answer is <ans>"
 
-def get_dataset(path, tokenizer, max_size=1000000000, num_proc=32):
+def get_dataset(path, tokenizer, max_size=1000000000, num_proc=32, ans_prefix_version=1):
 
     def tokenize_sample(sample):
 
@@ -62,7 +64,15 @@ def get_dataset(path, tokenizer, max_size=1000000000, num_proc=32):
 
     # verify
     d = data[0]
-    complete = d["question"] + "\n" + "\n".join(d["steps"]) + "\n### " + d["answer"]
+
+    # complete = d["question"] + "\n" + "\n".join(d["steps"]) + "\n### " + d["answer"]
+    if ans_prefix_version == 1:
+        ans_string = ANSWER_PREFIX_V1 + d["answer"]
+    else:
+        # for compatiblity with other baselines
+        ans_string = ANSWER_PREFIX_V2.replace("<ans>", d["answer"])
+    complete = d["question"] + "\n" + "\n".join(d["steps"]) + "\n" + ans_string
+
     complete_tokenized = tokenizer.encode(complete, add_special_tokens=True) + [
         tokenizer.eos_token_id
     ]
