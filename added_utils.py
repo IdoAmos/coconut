@@ -16,7 +16,7 @@ class HoppingUtils:
     def __init__(self, inverted=True):
         self.metric_pipeline = MetricPipeline(inverted_task=inverted, tokenizer=None)
         self.task_arg_keys = ["all_answers", "is_1hop"]
-        self.num_eval_samples = None
+        self.num_eval_samples = 500
         self.num_train_batches = None # 100
 
     def prediction_extraction_fn(self, preds: str) -> str:
