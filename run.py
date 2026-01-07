@@ -603,23 +603,24 @@ def main():
             gc.collect()
             torch.cuda.empty_cache()
         
-        if scheduled_stage not in best_acc_per_stage:
-            best_acc_per_stage[scheduled_stage] = cor / total
-        elif cor / total > best_acc_per_stage[scheduled_stage]:
-            best_acc_per_stage[scheduled_stage] = cor / total
+        current_stage = min([configs.max_latent_stage, scheduled_stage])
+        if current_stage not in best_acc_per_stage:
+            best_acc_per_stage[current_stage] = cor / total
+        elif cor / total > best_acc_per_stage[current_stage]:
+            best_acc_per_stage[current_stage] = cor / total
 
-        if cor / total >= best_acc_per_stage[scheduled_stage] and getattr(configs, "save_stage_on_improve", False):
+        if cor / total >= best_acc_per_stage[current_stage] and getattr(configs, "save_stage_on_improve", False):
             states = parallel_model.state_dict()
 
             if rank == 0:
-                torch.save(states, os.path.join(save_dir, f"stage_{scheduled_stage}_best_ckpt.ckpt"))
+                torch.save(states, os.path.join(save_dir, f"stage_{current_stage}_best_ckpt.ckpt"))
                 ckpt_metadata = {
                     "epoch": epoch,
                     "acc": cor / total,
                     "mean_time": sample_time.item() / total,
                     "task_perf": None if task_utils is None else task_cor.item() / total
                 }
-                metadata_path = os.path.join(save_dir, f"stage_{scheduled_stage}_ckpt_metad.json")
+                metadata_path = os.path.join(save_dir, f"stage_{current_stage}_ckpt_metad.json")
                 with open(metadata_path, "w") as f:
                     json.dump(ckpt_metadata, f)
                 print("saving model.")
