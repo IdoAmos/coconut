@@ -1,7 +1,7 @@
 # need 4 gpus
 
 project: coconut
-save_path: results/gsm
+save_path: results/gsm-icot
 name: gsm-icot-2
 
 only_eval: False

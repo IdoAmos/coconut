@@ -43,6 +43,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="coconut")
     parser.add_argument("config_file")
+    parser.add_argument("--name", default=None, type=str)
+    parser.add_argument("--load_model_path", default=None, type=str)
+    parser.add_argument("--c_thought", default=None, type=int)
     args = parser.parse_args()
 
     # init distributed environment
@@ -55,6 +58,16 @@ def main():
     # load the configuration file
     with open(args.config_file) as f:
         config_dict = yaml.safe_load(f)
+
+    if args.name is not None:
+        print("Overriding name to:", args.name)
+        config_dict["name"] = args.name
+    if args.load_model_path is not None:
+        print("Overriding model load path to:", args.load_model_path)
+        config_dict["load_model_path"] = args.load_model_path
+    if args.c_thought is not None:
+        print("Overriding c_thought to:", args.c_thought)
+        config_dict["c_thought"] = args.c_thought
 
     task_utils = None
     if config_dict.get("add_utils", None) is not None:
