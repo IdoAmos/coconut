@@ -616,7 +616,7 @@ def main():
             gc.collect()
             torch.cuda.empty_cache()
         
-        current_stage = min([configs.max_latent_stage, scheduled_stage])
+        current_stage = min([configs.max_latent_stage + 1, scheduled_stage])
         if current_stage not in best_acc_per_stage:
             best_acc_per_stage[current_stage] = cor / total
         elif cor / total > best_acc_per_stage[current_stage]:
